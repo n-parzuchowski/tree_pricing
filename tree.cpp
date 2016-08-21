@@ -8,9 +8,9 @@ using namespace std;
 
 // node in the pricing tree 
 struct tree_node{
-  int time,ypos,link_back,link_up,link_down;
+  int time,ypos,link_bu,link_bd,link_fu,link_fd; //bu == backward up, fd == forward down 
   double spot,optval_intr,optval_ex;
-  double prob_no_risk;
+  double prob_no_risk;  
 };
   
 void print_error_message(string error)
@@ -19,6 +19,29 @@ void print_error_message(string error)
   cout << error << endl;
   cout << "Usage: compute_tree <OPTION_TYPE (AC,EC,BC,AP,EP,BP)> <SPOT> <STRIKE> <EXPIRY> <RATE> <dS+> <dS-> <STEPS> [BARRIER]\n\n"; 
 }
+
+
+
+void populate_tree(tree_node *tree, int Nsteps, double S , double S_up, double S_down)
+{
+  int total_nodes = Nsteps*(Nsteps+1)/2 ;
+
+  for (int N=0; N< Nsteps ; N++){
+    int ii_before = N *(N+1)/2;
+    for (int ii=ii_before; ii < (N+1)*(N+2)/2; ii++ ){
+      tree[ii].time = N;
+      tree[ii].ypos = ii-ii_before;	
+    }
+  }
+
+  for ( int ii = 0 ; ii < total_nodes; ii++ )
+    cout << ii << tree[ii].time << tree[ii].ypos << endl;
+    
+  //tree[ii].link_fd  = 
+
+}  
+
+  
 
 int main(int argc, char* argv[])
 {
@@ -38,6 +61,8 @@ int main(int argc, char* argv[])
   int Nsteps = atoi(argv[8]);
   double barrier =  0.0;
   bool early_exit=false, call=false, barrier_exists=false; 
+
+
   
   // Print what is being calculated 
   switch ( Opt_type[0] ) {
@@ -104,8 +129,9 @@ int main(int argc, char* argv[])
 
   // set up tree 
   tree_node * tree; 
-  tree = new tree_node [Nsteps]; 
+  tree = new tree_node [Nsteps*(Nsteps+1)/2]; 
 
+  populate_tree(tree, Nsteps, spot_0 , up_jump, down_jump);
 
 
 
