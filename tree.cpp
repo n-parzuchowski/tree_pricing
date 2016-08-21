@@ -32,7 +32,7 @@ public:
   void populate(int);
   void kill_tree(void);
   void assign_values_probs(double,double,double,double,double);
-  double price_option(double,bool,bool,bool,double,double);
+  double price_option(double,bool,bool,double,double,double);
 };
 //==============================================================================
 //==============================================================================
@@ -111,7 +111,7 @@ void tree::assign_values_probs(double S, double dS_up , double dS_down, double r
 }
 //==============================================================================
 //============================================================================== 
-double tree::price_option(double strike, bool call, bool ee, bool be, double rate , double dT){
+double tree::price_option(double strike, bool call, bool ee, double rate , double dT , double bar){
   //price option by backwards induction 
 
   for (int ii=num_nodes-1 ; ii>=0 ; ii--){
@@ -138,6 +138,10 @@ double tree::price_option(double strike, bool call, bool ee, bool be, double rat
     }
     else
       node[ii].optval = excersize_value;
+
+    if (node[ii].spot < bar )
+      node[ii].optval = 0.0;
+    
   }
 	
   return node[0].optval;
@@ -168,8 +172,8 @@ int main(int argc, char* argv[])
   double up_jump = atof(argv[6]); //change in stock per step if positive 
   double down_jump = atof(argv[7]); //change in stock per step if negative  
   int Nsteps = atoi(argv[8]);
-  double barrier =  0.0;
-  bool early_exit=false, call=false, barrier_exists=false; 
+  double barrier;
+  bool early_exit=false, call=false;
 
   
   // Print what is being calculated 
@@ -201,50 +205,35 @@ int main(int argc, char* argv[])
 	return 0;
       }
     break;
-  case 'B':
-    if ( argc != 10)
-      {
-	print_error_message("\nAdd barrier price to command line arguments");
-	return 0;
-      }
     
-    barrier =  atof(argv[9]);
-    barrier_exists = true;
-    
-    if (Opt_type[1]=='C'){
-      call = true;
-      cout << "\nEuropean call option with spot " << spot_0 << " struck at " << strike;
-      cout << " and barrier " << barrier << "\n\n";
-    }
-    else if (Opt_type[1]=='P') {
-      cout << "\nEuropean put option with spot " << spot_0 << " struck at ";
-      cout<< strike <<  " and barrier " << barrier << "\n\n";
-    }
-    else
-      {
-	print_error_message("\nRequested price not available");
-	return 0;
-      }
-    break;
-
   default:
     print_error_message("\nRequested price not available");
     return 0;
   } 
 
+  if (argc == 10) {
+    barrier = atof(argv[9]); // barrier option. 
+    cout << "Barrier applied at "<< barrier << endl;
+  }
+  else
+    barrier = spot_0 - 2 * Nsteps* down_jump;
   // time step
   double dT = expiry_time/Nsteps;  
 
   // set up tree 
   tree value; 
 
+  // create tree object
   value.allocate_tree(Nsteps);
+    
   value.populate(Nsteps);
   value.assign_values_probs(spot_0, up_jump , down_jump, interest_rate , dT);
 
+  cout << "Option price: "<< value.price_option(strike, call,early_exit, interest_rate ,dT,barrier) << endl;
 
-  cout << "Option price: "<< value.price_option(strike, call,early_exit, barrier_exists, interest_rate ,dT) << endl;
+  // free the memory of the tree object
   value.kill_tree();
+
   // successful run
   return 0;
 }
