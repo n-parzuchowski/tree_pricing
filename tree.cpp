@@ -1,48 +1,157 @@
 // tree.cpp calculates option prices using a tree method
+// A bit of overkill, but a good learning enviroment of object-oriented programming
 #include <iostream>
 #include <stdlib.h>
 #include <math.h>
 
 using namespace std;
 
+double excersize( bool call , double strike , double spot ){
+  if (call)
+    return ( max(spot - strike,0.0) ); 
+  else
+    return (max(strike-spot,0.0) );
+}
 
 // node in the pricing tree 
 struct tree_node{
-  int time,ypos,link_bu,link_bd,link_fu,link_fd; //bu == backward up, fd == forward down 
-  double spot,optval_intr,optval_ex;
-  double prob_no_risk;  
+  int time,ypos;
+  double spot,optval;
+  double no_risk_prob;  
+  int get_neighbor_top_left(void);
+  int get_neighbor_bottom_left(void);
+  int get_neighbor_top_right(void);
+  int get_neighbor_bottom_right(void);
 };
+
+class tree{
+  tree_node * node;
+  int num_nodes;
+public:
+  void allocate_tree(int); 
+  void populate(int);
+  void kill_tree(void);
+  void assign_values_probs(double,double,double,double,double);
+  double price_option(double,bool,bool,bool,double,double);
+};
+//==============================================================================
+//==============================================================================
+int tree_node::get_neighbor_top_right(){
+  int ii_before = (time+2)*(time+1)/2;
+  return ii_before + ypos + 1;
+}
+//==============================================================================
+//==============================================================================
+int tree_node::get_neighbor_bottom_right(){  
+  int ii_before = (time+2)*(time+1)/2;
+  return ii_before + ypos;
+}
+//==============================================================================
+//==============================================================================
+int tree_node::get_neighbor_top_left(){
+  if (time*(time+1)/2+ypos+1 == (time+1)*(time+2)/2)
+    return -1;
+  int ii_before = time*(time-1)/2;
+  return ii_before + ypos;
+}
+//==============================================================================
+//==============================================================================
+int tree_node::get_neighbor_bottom_left(){  
+  int ii_before = time*(time-1)/2;
+  if (ypos == 0){
+    return -1;
+  }
+  else
+    return ii_before + ypos - 1; 
+}
+//==============================================================================
+//==============================================================================
+void tree::allocate_tree(int Nstep){
+  num_nodes = (Nstep+1)*(Nstep+2) /2;
+  node = new tree_node [num_nodes];
+}
+//==============================================================================
+//==============================================================================
+void tree::kill_tree(){
+  delete[] node;
+}
+//==============================================================================
+//==============================================================================
+void tree::populate(int Nsteps)
+{
+  for (int N=0; N< Nsteps+1; N++){
+    int ii_before = N *(N+1)/2;
+
+    for (int ii=ii_before; ii < (N+1)*(N+2)/2; ii++ ){
+
+      node[ii].time = N;
+      node[ii].ypos = ii-ii_before;	
+    }
+  }
+
+}  
+//==============================================================================
+//============================================================================== 
+void tree::assign_values_probs(double S, double dS_up , double dS_down, double rate, double dT){
   
+  node[0].spot=S;  
+  for ( int ii = 0 ; ii < num_nodes; ii++ ){
+    
+    int jj = node[ii].get_neighbor_bottom_right();
+    int kk = node[ii].get_neighbor_top_right();
+
+    if (kk < num_nodes){ 
+      node[jj].spot = node[ii].spot - dS_down;
+      node[kk].spot = node[ii].spot + dS_up;
+    }
+    
+    node[ii].no_risk_prob = (node[ii].spot*(exp(dT*rate)-1)+dS_down) / (dS_up + dS_down);
+
+  }
+}
+//==============================================================================
+//============================================================================== 
+double tree::price_option(double strike, bool call, bool ee, bool be, double rate , double dT){
+  //price option by backwards induction 
+
+  for (int ii=num_nodes-1 ; ii>=0 ; ii--){
+
+    int jj = node[ii].get_neighbor_bottom_right();
+    int kk = node[ii].get_neighbor_top_right();
+
+    double excersize_value = excersize(call,strike,node[ii].spot);
+    double intrinsic_value = excersize_value;
+    double dep = exp(-rate*dT);
+      
+    if (kk < num_nodes) {
+      
+      intrinsic_value = (node[ii].no_risk_prob * ( node[kk].optval - node[jj].optval) + node[jj].optval)*dep;
+      	
+      if (ee) {
+	
+	node[ii].optval = max(excersize_value,intrinsic_value);
+      }
+      else{
+
+	node[ii].optval = intrinsic_value;
+      }
+    }
+    else
+      node[ii].optval = excersize_value;
+  }
+	
+  return node[0].optval;
+}  
+//==============================================================================
+//============================================================================== 
 void print_error_message(string error)
 // usage statement
 {
   cout << error << endl;
   cout << "Usage: compute_tree <OPTION_TYPE (AC,EC,BC,AP,EP,BP)> <SPOT> <STRIKE> <EXPIRY> <RATE> <dS+> <dS-> <STEPS> [BARRIER]\n\n"; 
 }
-
-
-
-void populate_tree(tree_node *tree, int Nsteps, double S , double S_up, double S_down)
-{
-  int total_nodes = Nsteps*(Nsteps+1)/2 ;
-
-  for (int N=0; N< Nsteps ; N++){
-    int ii_before = N *(N+1)/2;
-    for (int ii=ii_before; ii < (N+1)*(N+2)/2; ii++ ){
-      tree[ii].time = N;
-      tree[ii].ypos = ii-ii_before;	
-    }
-  }
-
-  for ( int ii = 0 ; ii < total_nodes; ii++ )
-    cout << ii << tree[ii].time << tree[ii].ypos << endl;
-    
-  //tree[ii].link_fd  = 
-
-}  
-
-  
-
+//==============================================================================
+//==============================================================================       
 int main(int argc, char* argv[])
 {
 
@@ -61,7 +170,6 @@ int main(int argc, char* argv[])
   int Nsteps = atoi(argv[8]);
   double barrier =  0.0;
   bool early_exit=false, call=false, barrier_exists=false; 
-
 
   
   // Print what is being calculated 
@@ -128,16 +236,15 @@ int main(int argc, char* argv[])
   double dT = expiry_time/Nsteps;  
 
   // set up tree 
-  tree_node * tree; 
-  tree = new tree_node [Nsteps*(Nsteps+1)/2]; 
+  tree value; 
 
-  populate_tree(tree, Nsteps, spot_0 , up_jump, down_jump);
+  value.allocate_tree(Nsteps);
+  value.populate(Nsteps);
+  value.assign_values_probs(spot_0, up_jump , down_jump, interest_rate , dT);
 
 
-
-  
-  delete[] tree;
-  
+  cout << "Option price: "<< value.price_option(strike, call,early_exit, barrier_exists, interest_rate ,dT) << endl;
+  value.kill_tree();
   // successful run
   return 0;
 }
